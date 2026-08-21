@@ -60,16 +60,19 @@ class InventoryTracker:
     def delete_item(self, item_name, updated_by):
         """Completely removes an item from the inventory tracker."""
         if item_name in st.session_state.inventory:
-            # Delete from the current inventory dictionary
             del st.session_state.inventory[item_name]
-            
-            # Log the deletion so there is a permanent record
             self.log_action(item_name, "Deleted completely", 0, updated_by, "Item removed from system")
             st.toast(f"🗑️ '{item_name}' permanently deleted!")
             return True
         else:
             st.error(f"Error: {item_name} could not be found.")
             return False
+
+    def clear_history(self):
+        """Empties the entire transaction log."""
+        st.session_state.movement_log = []
+        st.toast("🧹 Transaction history cleared!")
+        return True
 
     def show_inventory(self):
         """Displays the current ledger."""
@@ -113,7 +116,6 @@ with tab1:
             col1, col2 = st.columns(2)
             with col1:
                 sel_item = st.selectbox("Select Item", item_list)
-                # Use negative numbers for checking out, positive for adding stock
                 mov_amount = st.number_input("Amount (Use '-' to remove, e.g., -3)", value=0, step=1)
             with col2:
                 mov_user = st.text_input("Your Name", placeholder="e.g. Jane Doe")
@@ -174,3 +176,12 @@ with tab2:
 with tab3:
     st.subheader("Movement History")
     tracker.show_log()
+    
+    # Danger Zone for Clearing History
+    if st.session_state.movement_log:
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("⚠️ Danger Zone: Clear History"):
+            st.warning("Are you sure? Clearing the history will permanently delete all records of past movements. This action cannot be undone.")
+            if st.button("Clear All History", type="primary"):
+                if tracker.clear_history():
+                    st.rerun()
