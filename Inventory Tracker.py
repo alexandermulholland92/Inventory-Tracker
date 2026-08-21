@@ -57,6 +57,20 @@ class InventoryTracker:
             st.error(f"Error: {item_name} does not exist.")
             return False
 
+    def delete_item(self, item_name, updated_by):
+        """Completely removes an item from the inventory tracker."""
+        if item_name in st.session_state.inventory:
+            # Delete from the current inventory dictionary
+            del st.session_state.inventory[item_name]
+            
+            # Log the deletion so there is a permanent record
+            self.log_action(item_name, "Deleted completely", 0, updated_by, "Item removed from system")
+            st.toast(f"🗑️ '{item_name}' permanently deleted!")
+            return True
+        else:
+            st.error(f"Error: {item_name} could not be found.")
+            return False
+
     def show_inventory(self):
         """Displays the current ledger."""
         if not st.session_state.inventory:
@@ -89,10 +103,10 @@ with tab1:
     st.subheader("Current Stock")
     tracker.show_inventory()
     
-    st.markdown("---")
-    st.subheader("Log a Movement")
-    
     if st.session_state.inventory:
+        st.markdown("---")
+        st.subheader("Log a Movement")
+        
         with st.form("movement_form"):
             item_list = list(st.session_state.inventory.keys())
             
@@ -115,8 +129,22 @@ with tab1:
                 else:
                     if tracker.record_movement(sel_item, mov_amount, mov_user, mov_notes):
                         st.rerun()
-    else:
-        st.caption("Add an item first to record movements.")
+
+        # Danger Zone for Deleting Items
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("⚠️ Danger Zone: Delete Item"):
+            st.warning("Deleting an item removes it permanently from the Current Stock. This action will be recorded in the Transaction Log.")
+            with st.form("delete_form"):
+                del_item = st.selectbox("Select Item to Delete", item_list)
+                del_user = st.text_input("Authorized By (Your Name)", key="del_user_input", placeholder="e.g. Jane Doe")
+                submit_delete = st.form_submit_button("Delete Item permanently")
+                
+                if submit_delete:
+                    if not del_user.strip():
+                        st.error("Please enter your name to authorize the deletion.")
+                    else:
+                        if tracker.delete_item(del_item, del_user):
+                            st.rerun()
 
 # --- TAB 2: REGISTER NEW ITEM ---
 with tab2:
