@@ -49,7 +49,7 @@ class InventoryTracker:
             st.session_state.inventory[item_name]["Updated By"] = updated_by
             st.session_state.inventory[item_name]["Date"] = datetime.date.today().isoformat()
             
-            direction = "Added In" if amount > 0 else "Removed Out"
+            direction = "Checked In" if amount > 0 else "Checked Out"
             self.log_action(item_name, direction, amount, updated_by, notes)
             st.toast(f"🔄 [{item_name}] {direction} {abs(amount)}. New Total: {st.session_state.inventory[item_name]['Qty']}")
             return True
@@ -108,7 +108,7 @@ with tab1:
     
     if st.session_state.inventory:
         st.markdown("---")
-        st.subheader("Log a Movement")
+        st.subheader("Process a Transaction")
         
         with st.form("movement_form"):
             item_list = list(st.session_state.inventory.keys())
@@ -116,21 +116,28 @@ with tab1:
             col1, col2 = st.columns(2)
             with col1:
                 sel_item = st.selectbox("Select Item", item_list)
-                mov_amount = st.number_input("Amount (Use '-' to remove, e.g., -3)", value=0, step=1)
+                action_type = st.radio("Action", ["📤 Check Out", "📥 Check In"], horizontal=True)
+                mov_amount = st.number_input("Quantity", value=1, step=1, min_value=1)
             with col2:
                 mov_user = st.text_input("Your Name", placeholder="e.g. Jane Doe")
-                mov_notes = st.text_input("Reason / Notes (Optional)", placeholder="e.g. Sent to field")
+                mov_notes = st.text_input("Reason / Notes (Optional)", placeholder="e.g. Job #1234")
                 
-            submit_movement = st.form_submit_button("Record Movement", type="primary")
+            submit_movement = st.form_submit_button("Submit Transaction", type="primary")
             
             if submit_movement:
                 if not mov_user.strip():
                     st.error("Please enter your name.")
-                elif mov_amount == 0:
-                    st.error("Amount cannot be zero.")
                 else:
-                    if tracker.record_movement(sel_item, mov_amount, mov_user, mov_notes):
-                        st.rerun()
+                    # Convert to negative if Checking Out
+                    final_amount = -mov_amount if "Check Out" in action_type else mov_amount
+                    current_qty = st.session_state.inventory[sel_item]["Qty"]
+                    
+                    # Prevent checking out more than we have
+                    if final_amount < 0 and abs(final_amount) > current_qty:
+                        st.error(f"Cannot check out {abs(final_amount)}. There are only {current_qty} in stock.")
+                    else:
+                        if tracker.record_movement(sel_item, final_amount, mov_user, mov_notes):
+                            st.rerun()
 
         # Danger Zone for Deleting Items
         st.markdown("<br>", unsafe_allow_html=True)
