@@ -1,12 +1,18 @@
 import datetime
+import pandas as pd
+import streamlit as st
+
+st.set_page_config(page_title="Inventory Tracker", page_icon="📦", layout="centered")
 
 class InventoryTracker:
     def __init__(self):
-        self.items = {}
+        # Store inventory in Streamlit session_state so it persists across page interactions
+        if "items" not in st.session_state:
+            st.session_state.items = {}
 
     def add_item(self, item_name, category, initial_qty=0, notes=""):
         """Registers an item with a starting baseline."""
-        self.items[item_name] = {
+        st.session_state.items[item_name] = {
             "Category": category,
             "Qty": initial_qty,
             "Updated By": "System Setup",
@@ -16,33 +22,38 @@ class InventoryTracker:
 
     def record_movement(self, item_name, amount, updated_by):
         """Tracks ins (positive) and outs (negative) while forcing accountability."""
-        if item_name in self.items:
-            self.items[item_name]["Qty"] += amount
-            self.items[item_name]["Updated By"] = updated_by
-            self.items[item_name]["Date"] = datetime.date.today().isoformat()
+        if item_name in st.session_state.items:
+            st.session_state.items[item_name]["Qty"] += amount
+            st.session_state.items[item_name]["Updated By"] = updated_by
+            st.session_state.items[item_name]["Date"] = datetime.date.today().isoformat()
             
             direction = "added" if amount > 0 else "removed"
-            print(f"[{item_name}] {direction} {abs(amount)}. New Total: {self.items[item_name]['Qty']} (Logged by {updated_by})")
+            st.toast(f"[{item_name}] {direction} {abs(amount)}. New Total: {st.session_state.items[item_name]['Qty']} (Logged by {updated_by})")
         else:
-            print(f"Error: {item_name} does not exist. Add it first.")
+            st.error(f"Error: {item_name} does not exist. Add it first.")
 
     def show_inventory(self):
-        """Displays the current ledger."""
-        print(f"{'Item':<20} | {'Category':<15} | {'Qty':<5} | {'Last Updated By':<15} | {'Date':<12}")
-        print("-" * 75)
-        
-        for name, data in self.items.items():
-            print(f"{name:<20} | {data['Category']:<15} | {data['Qty']:<5} | {data['Updated By']:<15} | {data['Date']:<12}")
+        """Displays the current ledger on the Streamlit web screen."""
+        if not st.session_state.items:
+            st.info("No items in inventory.")
+            return
 
-# --- Execution ---
+        # Convert dictionary to a DataFrame for clean, interactive table rendering
+        df = pd.DataFrame.from_dict(st.session_state.items, orient='index')
+        st.dataframe(df, use_container_width=True)
+
+# --- App Layout & Execution ---
+
+st.title("📦 Inventory Tracker")
 
 tracker = InventoryTracker()
 
-# 1. Register items with a starting count
-# tracker.add_item("2.1 Units", "Hardware", 20)
+# Populate initial inventory if empty
+if "initialized" not in st.session_state:
+    tracker.add_item("2.1 Units", "Hardware", 20)
+    tracker.record_movement("2.1 Units", -3, "Harrison")
+    tracker.record_movement("2.1 Units", 5, "Malavika")
+    st.session_state.initialized = True
 
-# 2. Log ins and outs (+ for in, - for out)
-# tracker.record_movement("2.1 Units", -3, "Harrison")  
-# tracker.record_movement("2.1 Units", 5, "Malavika")   
-
+# Display inventory table
 tracker.show_inventory()
