@@ -6,15 +6,13 @@ st.set_page_config(page_title="Inventory Tracker", page_icon="📦", layout="cen
 
 class InventoryTracker:
     def __init__(self):
-        # Initialize dictionary for current stock levels
         if "inventory" not in st.session_state:
             st.session_state.inventory = {}
-        # Initialize list for the historical movement log
         if "movement_log" not in st.session_state:
             st.session_state.movement_log = []
 
     def log_action(self, item_name, action, amount, updated_by, notes=""):
-        """Helper function to record transactions in the history log."""
+        """Records transactions in the history log."""
         log_entry = {
             "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Item Name": item_name,
@@ -23,7 +21,7 @@ class InventoryTracker:
             "Updated By": updated_by,
             "Notes": notes
         }
-        st.session_state.movement_log.insert(0, log_entry) # Insert at top (newest first)
+        st.session_state.movement_log.insert(0, log_entry)
 
     def add_item(self, item_name, category, initial_qty, updated_by, notes=""):
         """Registers a new item with a starting baseline."""
@@ -69,22 +67,22 @@ class InventoryTracker:
             return False
 
     def clear_history(self):
-        """Empties the entire transaction log."""
+        """Empties the transaction log."""
         st.session_state.movement_log = []
         st.toast("🧹 Transaction history cleared!")
         return True
 
     def show_inventory(self):
-        """Displays the current ledger."""
+        """Displays current inventory."""
         if not st.session_state.inventory:
-            st.info("No items in inventory. Go to the 'Register New Item' tab to get started.")
+            st.info("No items registered yet. Use the **➕ Register New Item** tab above to add items.")
             return
 
         df = pd.DataFrame.from_dict(st.session_state.inventory, orient='index')
         st.dataframe(df, use_container_width=True)
 
     def show_log(self):
-        """Displays the historical transaction log."""
+        """Displays historical log."""
         if not st.session_state.movement_log:
             st.info("No movements recorded yet.")
             return
@@ -98,51 +96,53 @@ st.title("📦 Inventory Tracker")
 
 tracker = InventoryTracker()
 
-# Create tabs for clean navigation
-tab1, tab2, tab3 = st.tabs(["📋 Current Inventory", "➕ Register New Item", "📜 Transaction Log"])
+tab1, tab2, tab3 = st.tabs(["📋 Current Inventory & Check Out", "➕ Register New Item", "📜 Transaction Log"])
 
 # --- TAB 1: CURRENT INVENTORY & MOVEMENT ---
 with tab1:
     st.subheader("Current Stock")
     tracker.show_inventory()
     
-    if st.session_state.inventory:
-        st.markdown("---")
-        st.subheader("Process a Transaction")
+    st.markdown("---")
+    st.subheader("📤 Check Out / 📥 Check In Items")
+    
+    has_items = bool(st.session_state.inventory)
+    item_list = list(st.session_state.inventory.keys()) if has_items else ["No items available"]
+    
+    with st.form("movement_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            sel_item = st.selectbox("Select Item", item_list, disabled=not has_items)
+            action_type = st.radio("Action", ["📤 Check Out", "📥 Check In"], horizontal=True, disabled=not has_items)
+            mov_amount = st.number_input("Quantity", value=1, step=1, min_value=1, disabled=not has_items)
+        with col2:
+            mov_user = st.text_input("Your Name", placeholder="e.g. Jane Doe", disabled=not has_items)
+            mov_notes = st.text_input("Reason / Job # (Optional)", placeholder="e.g. Field Project A", disabled=not has_items)
+            
+        submit_movement = st.form_submit_button(
+            "Submit Transaction" if has_items else "Add an item first to enable transactions", 
+            type="primary", 
+            disabled=not has_items
+        )
         
-        with st.form("movement_form"):
-            item_list = list(st.session_state.inventory.keys())
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                sel_item = st.selectbox("Select Item", item_list)
-                action_type = st.radio("Action", ["📤 Check Out", "📥 Check In"], horizontal=True)
-                mov_amount = st.number_input("Quantity", value=1, step=1, min_value=1)
-            with col2:
-                mov_user = st.text_input("Your Name", placeholder="e.g. Jane Doe")
-                mov_notes = st.text_input("Reason / Notes (Optional)", placeholder="e.g. Job #1234")
+        if submit_movement and has_items:
+            if not mov_user.strip():
+                st.error("Please enter your name.")
+            else:
+                final_amount = -mov_amount if "Check Out" in action_type else mov_amount
+                current_qty = st.session_state.inventory[sel_item]["Qty"]
                 
-            submit_movement = st.form_submit_button("Submit Transaction", type="primary")
-            
-            if submit_movement:
-                if not mov_user.strip():
-                    st.error("Please enter your name.")
+                if final_amount < 0 and abs(final_amount) > current_qty:
+                    st.error(f"Cannot check out {abs(final_amount)}. Only {current_qty} currently in stock.")
                 else:
-                    # Convert to negative if Checking Out
-                    final_amount = -mov_amount if "Check Out" in action_type else mov_amount
-                    current_qty = st.session_state.inventory[sel_item]["Qty"]
-                    
-                    # Prevent checking out more than we have
-                    if final_amount < 0 and abs(final_amount) > current_qty:
-                        st.error(f"Cannot check out {abs(final_amount)}. There are only {current_qty} in stock.")
-                    else:
-                        if tracker.record_movement(sel_item, final_amount, mov_user, mov_notes):
-                            st.rerun()
+                    if tracker.record_movement(sel_item, final_amount, mov_user, mov_notes):
+                        st.rerun()
 
-        # Danger Zone for Deleting Items
+    # Danger Zone for Deleting Items
+    if has_items:
         st.markdown("<br>", unsafe_allow_html=True)
         with st.expander("⚠️ Danger Zone: Delete Item"):
-            st.warning("Deleting an item removes it permanently from the Current Stock. This action will be recorded in the Transaction Log.")
+            st.warning("Deleting an item permanently removes it from Current Stock. This action will be logged in History.")
             with st.form("delete_form"):
                 del_item = st.selectbox("Select Item to Delete", item_list)
                 del_user = st.text_input("Authorized By (Your Name)", key="del_user_input", placeholder="e.g. Jane Doe")
@@ -150,7 +150,7 @@ with tab1:
                 
                 if submit_delete:
                     if not del_user.strip():
-                        st.error("Please enter your name to authorize the deletion.")
+                        st.error("Please enter your name to authorize deletion.")
                     else:
                         if tracker.delete_item(del_item, del_user):
                             st.rerun()
@@ -184,11 +184,10 @@ with tab3:
     st.subheader("Movement History")
     tracker.show_log()
     
-    # Danger Zone for Clearing History
     if st.session_state.movement_log:
         st.markdown("<br>", unsafe_allow_html=True)
         with st.expander("⚠️ Danger Zone: Clear History"):
-            st.warning("Are you sure? Clearing the history will permanently delete all records of past movements. This action cannot be undone.")
+            st.warning("Permanently deletes all records of past movements. Cannot be undone.")
             if st.button("Clear All History", type="primary"):
                 if tracker.clear_history():
                     st.rerun()
