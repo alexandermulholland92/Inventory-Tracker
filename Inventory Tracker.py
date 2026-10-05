@@ -184,6 +184,17 @@ class InventoryTracker:
         flash(f"🗑️ '{item_name}' permanently deleted!")
         return True
 
+    def delete_all_items(self, updated_by):
+        """Completely removes all items from the inventory tracker."""
+        rows = db_op("DELETE FROM inventory RETURNING item_name", fetch="all")
+        if not rows:
+            st.info("No items to delete.")
+            return False
+
+        self.log_action("ALL_ITEMS", "Deleted completely", 0, updated_by, "All items removed from system")
+        flash("🗑️ All items permanently deleted!")
+        return True
+
     def clear_history(self):
         """Empties the transaction log."""
         db_op("DELETE FROM movement_log")
@@ -323,6 +334,20 @@ with tab1:
                         st.error("Please enter your name to authorize deletion.")
                     else:
                         if tracker.delete_item(del_item, del_user):
+                            st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("⚠️ Danger Zone: Delete All Items"):
+            st.warning("Permanently removes ALL items from inventory. This action will be logged in History.")
+            with st.form("delete_all_form"):
+                del_all_user = st.text_input("Authorized By (Your Name)", key="del_all_user_input", placeholder="e.g. Jane Doe")
+                submit_delete_all = st.form_submit_button("Delete ALL Items Permanently", type="primary")
+
+                if submit_delete_all:
+                    if not del_all_user.strip():
+                        st.error("Please enter your name to authorize deletion.")
+                    else:
+                        if tracker.delete_all_items(del_all_user):
                             st.rerun()
 
 # --- TAB 2: REGISTER NEW ITEM ---
